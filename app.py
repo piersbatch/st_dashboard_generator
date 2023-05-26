@@ -1,29 +1,91 @@
 import streamlit as st
-import openai
+import snowflake.connector as sf
 
-#prompt=st.selectbox("")
-name=st.text_area("Your name")
-button=st.button("Generate Message")
-person =  "https://www.linkedin.com/in/piers-batchelor/"
-company = "https://www.linkedin.com/company/astratoanalytics/?originalSubdomain=uk"
+# Snowflake connection details
+connection_config = {
+    'user': 'YOUR_USERNAME',
+    'password': 'YOUR_PASSWORD',
+    'account': 'YOUR_ACCOUNT_URL',
+    'warehouse': 'YOUR_WAREHOUSE',
+}
 
-def response1(person, company):
-    openai.api_key = "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"
-    #openai.api_key=st.secrets["api"]
-    
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt=f""""using language you find in their profile and third party validation, write a short cold outreach email with a video to {person} from {company} mentioning what they do to get a meeting and introduce how Vizlib can help increase adoption of Qlik""",
-        temperature=0,
-        max_tokens=1111,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-        )
-    print(response)
-    return response.choices[0].text
+# Establish the Snowflake connection
+conn = None
 
-if person and company and button and name:
-        answer=response1(person, company)
-        answer= answer.replace("[Your Name]", name)
-        st.markdown(answer)
+# Create Snowflake connection function
+def create_connection(username, password, account, warehouse):
+    connection_config['user'] = username
+    connection_config['password'] = password
+    connection_config['account'] = account
+    connection_config['warehouse'] = warehouse
+
+    try:
+        global conn
+        conn = sf.connect(**connection_config)
+        st.success("Snowflake connection established successfully!")
+    except Exception as e:
+        st.error(f"Error connecting to Snowflake: {str(e)}")
+
+# Get list of databases
+def get_databases():
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SHOW DATABASES")
+        databases = [row[0] for row in cursor]
+        return databases
+    except Exception as e:
+        st.error(f"Error fetching databases: {str(e)}")
+        return []
+
+# Get list of schemas in a database
+def get_schemas(database):
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f"SHOW SCHEMAS IN DATABASE {database}")
+        schemas = [row[0] for row in cursor]
+        return schemas
+    except Exception as e:
+        st.error(f"Error fetching schemas: {str(e)}")
+        return []
+
+# Get list of tables/views in a schema
+def get_tables(schema):
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f"SHOW TABLES IN SCHEMA {schema}")
+        tables = [row[0] for row in cursor]
+        return tables
+    except Exception as e:
+        st.error(f"Error fetching tables/views: {str(e)}")
+        return []
+
+# Main function
+def main():
+    st.title("Snowflake Connection")
+
+    # Snowflake connection form
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    account = st.text_input("Account URL")
+    warehouse = st.text_input("Warehouse")
+
+    if st.button("Connect"):
+        create_connection(username, password, account, warehouse)
+
+    # Database, Schema, and Table/View selection form
+    if conn is not None:
+        databases = get_databases()
+        selected_database = st.selectbox("Select Database", databases)
+
+        schemas = get_schemas(selected_database)
+        selected_schema = st.selectbox("Select Schema", schemas)
+
+        tables = get_tables(selected_schema)
+        selected_table = st.selectbox("Select Table/View", tables)
+
+        st.success(f"Selected Database: {selected_database}")
+        st.success(f"Selected Schema: {selected_schema}")
+        st.success(f"Selected Table/View: {selected_table}")
+
+if __name__ == '__main__':
+    main()
